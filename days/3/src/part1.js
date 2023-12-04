@@ -5,35 +5,74 @@ const readStream = fs.createReadStream('../input.txt');
 
 const rl = readline.createInterface({ input: readStream });
 
-/**
- * Find consecutive sequences in an array.
- *
- * Returns the consecutive sequences as an array.
- *
- * @example
- * findConsecutive([0,1,2,5,6,7]);
- * // -> [[0, 1, 2], [5, 6, 7]]
- *
- *
- * @param {number[]} array
- * @returns {number[][]}
- */
-const findConsecutive = (array) => {
-    let temp = [];
-    let result = [];
+const isDigit = (char) => /\d/.test(char);
 
-    for (let i = 0; i < array.length; i++) {
-        const diff = array[i] - array[i + 1];
-        if (Math.abs(diff) === 1) {
-            temp.push(array[i]);
-        } else {
-            temp.push(array[i]);
-            result.push(temp);
-            temp = [];
+// Everything except digits or .
+const isSymbol = (char) => /[^0-9.]/.test(char);
+
+/**
+ * Find and remove a number from the matrix, starting at the given coordinates
+ * @param {String[][]} matrix
+ * @param {[number, number]} coord
+ * @returns {number} - The value of the extracted number
+ */
+const extractNumber = (matrix, [rowIndex, colIndex]) => {
+    const row = matrix[rowIndex];
+
+    let pos = colIndex;
+
+    while (isDigit(row[pos])) {
+        // Walk back until the beginning of the number
+        pos -= 1;
+    }
+    pos += 1;
+
+    let numString = '';
+
+    while (isDigit(row[pos])) {
+        // Walk forward capturing each digit in the number
+        numString = numString + row[pos];
+        row[pos] = void 0; // Remove from the matrix
+        pos += 1;
+    }
+
+    return Number(numString);
+};
+
+/**
+ * Build a generator which iterates over all the coordinates which surround a coordinate
+ *
+ * @param {*[][]} matrix
+ * @param {[number, number]} coord
+ * @returns {Generator<number[], void, *>}
+ */
+function* getSurrounding(matrix, [rowIndex, colIndex]) {
+    const rowBefore = Math.max(0, rowIndex - 1);
+    const rowAfter = Math.min(matrix.length - 1, rowIndex + 1);
+
+    const colBefore = Math.max(0, colIndex - 1);
+    const colAfter = Math.min(matrix[colIndex].length, colIndex + 1);
+
+    for (let r = rowBefore; r <= rowAfter; r++) {
+        for (let c = colBefore; c <= colAfter; c++) {
+            yield [r, c];
         }
     }
-    return result;
-};
+}
+
+/**
+ * Build a generator which iterates over each coordinate pair in a matrix
+ *
+ * @param {*[][]} matrix
+ * @returns {Generator<number[], void, *>}
+ */
+function* matrixIter(matrix) {
+    for (const [rowIndex, row] of matrix.entries()) {
+        for (const [colIndex] of row.entries()) {
+            yield [rowIndex, colIndex];
+        }
+    }
+}
 
 const matrix = [];
 
@@ -48,52 +87,16 @@ rl.on('line', lineParser);
 rl.on('close', () => {
     const numbers = [];
 
-    for (let row = 0; row < matrix.length; row++) {
-        const numberIndexes = [];
-        // Find the index of all the digits in the row
-        for (let col = 0; col < matrix[row].length; col++) {
-            if (/\d/.test(matrix[row][col])) {
-                numberIndexes.push(col);
-            }
-        }
+    for (const [rowIndex, colIndex] of matrixIter(matrix)) {
+        if (isSymbol(matrix[rowIndex][colIndex])) {
+            // Get the surrounding coordinates
+            const surrounding = getSurrounding(matrix, [rowIndex, colIndex]);
 
-        // Find the indexes of all the digits in the row as separate arrays
-        const consecutives = findConsecutive(numberIndexes);
-
-        for (const numberIndexes of consecutives) {
-            // Build the number value from the indexes
-            const number = Number(
-                numberIndexes.map((n) => matrix[row][n]).join('')
-            );
-
-            // Indexes to test
-            const testIndexes = new Set(numberIndexes);
-
-            // Add the index before and behind each index to test
-            for (const idx of numberIndexes) {
-                if (idx - 1 >= 0) {
-                    testIndexes.add(idx - 1);
-                }
-
-                if (idx + 1 < matrix[row].length) {
-                    testIndexes.add(idx + 1);
-                }
-            }
-
-            const prevRow = Math.max(row - 1, 0);
-            const nextRow = row + 1 < matrix.length ? row + 1 : row;
-
-            // Match anything except digits, ., or control chars
-            const symbolRegex = /[^0-9.\s]/;
-
-            for (const testIndex of testIndexes) {
-                // If the regex matches the test index in either this, the previous, or the next row
-                if (
-                    symbolRegex.test(matrix[prevRow][testIndex]) ||
-                    symbolRegex.test(matrix[row][testIndex]) ||
-                    symbolRegex.test(matrix[nextRow][testIndex])
-                ) {
-                    // Found a part number
+            for (const [rowIndex, colIndex] of surrounding) {
+                // Look for digits adjacent to a symbol
+                if (isDigit(matrix[rowIndex][colIndex])) {
+                    // For each digit in the surrounding coords
+                    const number = extractNumber(matrix, [rowIndex, colIndex]);
                     numbers.push(number);
                 }
             }
